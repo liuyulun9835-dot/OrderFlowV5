@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Dict, Iterable, Optional
+from typing import Dict, Iterable, Optional, Sequence
 
 CONFIG_PATH = Path("configs/trade_rules.json")
 VALIDATOR_RESULTS = Path("results/white_black_list.json")
@@ -29,12 +29,27 @@ class DecisionTreeEngine:
         validator_rules = self._load_json(self.validator_path)
         config_rules = self._load_json(self.config_path)
         rules = validator_rules or config_rules or {"whitelist": [], "blacklist": []}
-        self.whitelist = rules.get("whitelist", [])
-        self.blacklist = rules.get("blacklist", [])
+        self.whitelist = self._normalise_entries(rules.get("whitelist", []))
+        self.blacklist = self._normalise_entries(rules.get("blacklist", []))
         if validator_rules and (validator_rules != config_rules):
             CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
             with self.config_path.open("w", encoding="utf-8") as handle:
                 json.dump(rules, handle, indent=2, ensure_ascii=False)
+
+    @staticmethod
+    def _normalise_entries(entries: Sequence | Iterable) -> Iterable[str]:
+        normalised = []
+        for item in entries:
+            if isinstance(item, dict):
+                if "scene" in item:
+                    normalised.append(item["scene"])
+                elif "name" in item:
+                    normalised.append(item["name"])
+                elif "expression" in item:
+                    normalised.append(item["expression"])
+            else:
+                normalised.append(str(item))
+        return normalised
 
     def is_scene_allowed(self, scene: str) -> bool:
         if scene in self.blacklist:
