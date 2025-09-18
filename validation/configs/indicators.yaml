@@ -1,0 +1,20 @@
+MSI:
+  value_migration_window: 20
+  value_migration_speed_window: 10
+  value_migration_consistency_window: 30
+MFI:
+  cvd_ema_fast_span: 8
+  cvd_ema_slow_span: 21
+  cvd_macd_fast_span: 12
+  cvd_macd_slow_span: 26
+  cvd_macd_signal_span: 9
+  cvd_rsi_period: 14
+  imbalance_min_z: 1.0
+KLI:
+  absorption_min: 150
+  lvn_radius_bps: 12
+  hvn_radius_bps: 18
+STATE:
+  atr_lookback: 14
+  keltner_mult: 1.5
+  vwap_session: regular

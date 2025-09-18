@@ -1,0 +1,24 @@
+[tool.poetry]
+name = "orderflow-v5"
+packages = [
+    { include = "preprocessing" },
+    { include = "strategy_core" },
+    { include = "validation" },
+    { include = "scripts" },
+]
+version = "0.1.0"
+description = "OrderFlow V5 validation utilities"
+authors = ["OrderFlow Team <dev@example.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+numpy = "^1.26"
+pandas = "^2.1"
+pyyaml = "^6.0"
+statsmodels = "^0.14"
+openpyxl = "^3.1"
+pyarrow = "^14.0"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
