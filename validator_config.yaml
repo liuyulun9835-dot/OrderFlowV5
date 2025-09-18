@@ -1,1 +1,64 @@
-# TODO: Populate validator configuration parameters.
+# validator_config.yaml
+# OrderFlow V5 – Validator v2 配置模板
+
+indicators:
+  - cvd_z
+  - cvd_macd
+  - imbalance
+  - vol_pctl
+  - bar_delta
+  - value_migration
+  - value_migration_speed
+  - value_migration_consistency
+  - near_val
+  - near_vah
+  - near_poc
+  - absorption_detected
+  - absorption_strength
+  - in_lvn
+  - state_confidence
+  - ret_var
+  - ret_acf1
+  - cvd_skew
+  - cvd_kurt
+  - migration_accel
+
+slicing:
+  market_state: [BALANCED, TRENDING, TRANSITIONAL]
+  structure: [near_val, near_vah, none]
+  session: [asia, europe, us]
+  volatility_quantiles: [0-33, 34-66, 67-100]
+
+tests:
+  - type: t_test
+    horizons: [5m, 15m, 30m, 60m]
+    alpha: 0.05
+  - type: bootstrap
+    horizons: [15m, 30m]
+    n_iter: 1000
+  - type: spearman_corr
+    horizons: [5m, 30m, 60m]
+  - type: logistic_regression
+    target: fut_ret_15m > 0
+    predictors: [cvd_z, vol_pctl, state_confidence]
+
+stability:
+  rolling_window: 90d
+  threshold_shift: 10%
+
+multiple_testing:
+  method: fdr_bh
+  q: 0.05
+
+output:
+  file: results/validation_report.xlsx
+  include:
+    - indicator
+    - slice
+    - horizon
+    - mean_ret
+    - win_rate
+    - effect_size
+    - p_value
+    - p_adj
+    - sample_size
