@@ -1,0 +1,11 @@
+results_dir: results
+scenes_whitelist: validation/configs/scenes_whitelist.yaml
+indicator_config: validation/configs/indicators.yaml
+costs_config: validation/configs/costs.yaml
+minimum_samples: 300
+fdr_alpha: 0.10
+stability_threshold: 0.6
+cost_scenarios:
+  - base
+  - plus_50
+  - double

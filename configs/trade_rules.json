@@ -1,0 +1,25 @@
+{
+  "whitelist": [],
+  "blacklist": [
+    "AMT_001_open_drive",
+    "AMT_002_failed_auction",
+    "AMT_003_value_rotation",
+    "AMT_004_vah_reject",
+    "AMT_005_val_reject",
+    "AMT_006_poc_shift_up",
+    "AMT_007_poc_shift_down",
+    "AMT_008_trend_continuation",
+    "AMT_009_trend_reversal",
+    "AMT_010_liquidity_gap",
+    "AMT_011_absorption_buy",
+    "AMT_012_absorption_sell",
+    "AMT_013_lvn_breakout",
+    "AMT_014_hvn_rejection",
+    "AMT_015_spread_widening",
+    "AMT_016_spread_contracting",
+    "AMT_017_session_transition",
+    "AMT_018_open_balance",
+    "AMT_019_breakout_pullback",
+    "AMT_020_failed_breakout"
+  ]
+}
