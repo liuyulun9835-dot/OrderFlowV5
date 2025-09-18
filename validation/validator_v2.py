@@ -44,66 +44,88 @@ class ValidatorV2:
             self.cost_configs: Dict[str, Dict[str, float]] = yaml.safe_load(handle)
         writers.ensure_results_dir(self.config.results_dir)
 
-    def run(self) -> Dict[str, Path]:
+    def _prepare_dataset(self) -> pd.DataFrame:
         dataset, _ = loaders.load_dataset()
-        forward_returns, labels_series = labels.make_labels(dataset)
-        dataset["label"] = labels_series
+        label_artifacts = labels.make_labels(dataset)
+        dataset = dataset.copy()
+        dataset["forward_return"] = label_artifacts.forward_returns
+        dataset["label"] = label_artifacts.primary_label
+        dataset = dataset.join(label_artifacts.filters)
+        dataset = dataset.join(label_artifacts.meta_signals)
+        return dataset
 
-        trigger_columns = {col: 0.9 for col in dataset.columns if col.startswith("MFI_")}
-        trigger_matrix = triggers.build_trigger_matrix(dataset[list(trigger_columns.keys())], trigger_columns) if trigger_columns else None
+    def run(self) -> Dict[str, Path]:
+        dataset = self._prepare_dataset()
 
-        numeric_dataset = dataset.select_dtypes(include=["number"])
-        univariate_result = univariate.compute_univariate(numeric_dataset.drop(columns=["scene"]), "label", self.config.fdr_alpha)
-        multi_inputs = numeric_dataset
-        regression_results = multivariate.run_regressions(multi_inputs, "label")
+        numeric_columns = dataset.select_dtypes(include=["number"]).columns
+        metrics = [
+            column
+            for column in numeric_columns
+            if column
+            not in {
+                "label",
+                "forward_return",
+                "RE",
+                "HV",
+                "HF",
+            }
+            and not column.startswith("U")
+        ]
+
+        univariate_config = univariate.UnivariateConfig(
+            metrics=metrics,
+            min_samples=self.config.minimum_samples,
+            fdr_alpha=self.config.fdr_alpha,
+            stability_threshold=self.config.stability_threshold,
+        )
+        univariate_result = univariate.compute_univariate(dataset, "label", univariate_config)
+
         stability_result = stability.compute_stability(dataset, "label")
-        cost_result = costs.evaluate_costs(forward_returns, self.cost_configs)
-        qc_report = qc.run_qc(dataset, "label", self.config.minimum_samples, stability_result.score, self.config.stability_threshold)
+        qc_report = qc.run_qc(
+            dataset,
+            "label",
+            self.config.minimum_samples,
+            stability_result.score,
+            self.config.stability_threshold,
+        )
 
-        combo_matrix = dataset[["scene", "label"]].copy()
-        combo_matrix["scene_name"] = combo_matrix["scene"].apply(lambda idx: self.scene_universe.whitelist[idx % len(self.scene_universe.whitelist)])
-        if trigger_matrix is not None:
-            combo_matrix = combo_matrix.join(trigger_matrix)
+        multivariate_result = multivariate.run_regressions(
+            dataset,
+            label_column="label",
+            forward_returns=dataset["forward_return"],
+            controls=["session_id", "atr_norm_range", "spread_bps", "state_tag", "ls_norm"],
+        )
 
-        whitelist = [row.metric for _, row in univariate_result.summary.iterrows() if row.reject]
-        blacklist = [scene for scene in self.scene_universe.whitelist if scene not in whitelist[: len(self.scene_universe.whitelist) // 2]]
-        rules = {"whitelist": whitelist, "blacklist": blacklist}
+        cost_result = costs.evaluate_costs(dataset["forward_return"], self.cost_configs)
 
-        results_dir = self.config.results_dir
-        excel_path = results_dir / "OF_V5_stats.xlsx"
-        parquet_path = results_dir / "combo_matrix.parquet"
-        json_path = results_dir / "white_black_list.json"
-        report_path = results_dir / "validator_v2_report.md"
+        trigger_summary = triggers.build_trigger_matrix(dataset, ["U1", "U2", "U3"])  # used for QC context
 
-        sheets = {
-            "univariate": univariate_result.summary,
-            "stability": stability_result.metrics,
-            "costs": cost_result,
+        whitelist, blacklist = writers.make_scene_lists(univariate_result.summary, self.scene_universe.whitelist)
+        qc_summary = {
+            "samples": str(len(dataset)),
+            "qc_pass": str(qc_report.is_valid()),
+            "stability": f"{stability_result.score:.2f}",
+            "whitelist": f"{len(whitelist)} scenes",
+            "trigger_thresholds": ", ".join(
+                f"{name}>= {value:.2f}" for name, value in trigger_summary.thresholds.items()
+            ),
         }
-        for name, result in regression_results.items():
-            sheets[f"regression_{name}"] = result.params
 
-        writers.write_excel(excel_path, sheets)
-        writers.write_parquet(parquet_path, combo_matrix)
-        writers.write_json(json_path, rules)
+        artifacts = writers.write_outputs(
+            self.config.results_dir,
+            univariate_result.summary,
+            multivariate_result.combinations,
+            multivariate_result.state_breakdown,
+            cost_result,
+            whitelist,
+            blacklist,
+            multivariate_result.combo_matrix,
+            qc_summary,
+        )
 
-        markdown_sections = {
-            "Validator v2 Report": (
-                f"Samples: {len(dataset)}\\n"
-                f"FDR α: {self.config.fdr_alpha}\\n"
-                f"QC Pass: {qc_report.is_valid()}\\n"
-                f"Stability Score: {stability_result.score:.2f}\\n"
-            )
-        }
-        writers.write_markdown(report_path, markdown_sections)
-        writers.sync_trade_rules(Path("configs/trade_rules.json"), rules)
+        writers.sync_trade_rules(Path("configs/trade_rules.json"), {"whitelist": whitelist, "blacklist": blacklist})
 
-        return {
-            "excel": excel_path,
-            "parquet": parquet_path,
-            "json": json_path,
-            "markdown": report_path,
-        }
+        return artifacts
 
 
 def run() -> Dict[str, Path]:

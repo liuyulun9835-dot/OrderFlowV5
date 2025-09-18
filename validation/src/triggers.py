@@ -2,30 +2,26 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict
+from typing import Dict, Iterable
 
 import pandas as pd
 
 
 @dataclass
-class TriggerResult:
-    scores: pd.Series
-    threshold: float
+class TriggerSummary:
+    thresholds: Dict[str, float]
+    matrix: pd.DataFrame
 
 
-def compute_trigger(df: pd.DataFrame, column: str, quantile: float = 0.9) -> TriggerResult:
-    scores = df[column]
-    threshold = float(scores.quantile(quantile))
-    return TriggerResult(scores=scores, threshold=threshold)
+def build_trigger_matrix(df: pd.DataFrame, columns: Iterable[str], quantile: float = 0.9) -> TriggerSummary:
+    """Create a boolean trigger matrix using quantile thresholds."""
 
-
-def trigger_to_flags(trigger: TriggerResult) -> pd.Series:
-    return (trigger.scores >= trigger.threshold).astype(int)
-
-
-def build_trigger_matrix(df: pd.DataFrame, columns: Dict[str, float]) -> pd.DataFrame:
-    data = {}
-    for column, quantile in columns.items():
-        trigger = compute_trigger(df, column, quantile)
-        data[column] = trigger_to_flags(trigger)
-    return pd.DataFrame(data)
+    thresholds: Dict[str, float] = {}
+    matrix = pd.DataFrame(index=df.index)
+    for column in columns:
+        if column not in df:
+            continue
+        threshold = float(df[column].quantile(quantile))
+        matrix[column] = (df[column] >= threshold).astype(int)
+        thresholds[column] = threshold
+    return TriggerSummary(thresholds=thresholds, matrix=matrix)

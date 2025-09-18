@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict
 
+import numpy as np
 import pandas as pd
 
 
@@ -15,17 +16,32 @@ class CostScenario:
     slippage_bps: float
 
 
-def evaluate_costs(base_pnl: pd.Series, configs: Dict[str, Dict[str, float]]) -> pd.DataFrame:
+def evaluate_costs(forward_returns: pd.Series, configs: Dict[str, Dict[str, float]]) -> pd.DataFrame:
+    """Return gross/net expectancy under different cost assumptions."""
+
     records = []
-    gross = base_pnl.mean()
+    gross = float(forward_returns.mean())
+    volatility = float(forward_returns.std(ddof=1))
+    sharpe = gross / volatility if volatility else 0.0
+    hit_rate = float((forward_returns > 0).mean())
+
     for name, cfg in configs.items():
-        total_cost = (cfg["taker_fee_bps"] + cfg["slippage_bps"]) / 10000.0
+        taker_cost = cfg.get("taker_fee_bps", 0.0) / 10_000.0
+        maker_cost = cfg.get("maker_fee_bps", 0.0) / 10_000.0
+        slippage_cost = cfg.get("slippage_bps", 0.0) / 10_000.0
+        total_cost = taker_cost + slippage_cost
         net = gross - total_cost
-        records.append({
-            "scenario": name,
-            "gross": gross,
-            "net": net,
-            "taker_fee_bps": cfg["taker_fee_bps"],
-            "slippage_bps": cfg["slippage_bps"],
-        })
+        records.append(
+            {
+                "scenario": name,
+                "gross": gross,
+                "net": net,
+                "hit_rate": hit_rate,
+                "sharpe": sharpe,
+                "taker_fee_bps": cfg.get("taker_fee_bps", np.nan),
+                "maker_fee_bps": cfg.get("maker_fee_bps", np.nan),
+                "slippage_bps": cfg.get("slippage_bps", np.nan),
+            }
+        )
+
     return pd.DataFrame(records)
